@@ -164,7 +164,7 @@ app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 @app.route('/api/chat', methods=['GET', 'POST'])
-def chat(self):
+def chat():
     if request.method == "POST":
         args = parser.parse_args()
         # Invoke your text processing script here
