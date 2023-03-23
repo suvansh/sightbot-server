@@ -171,45 +171,45 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 def index():
     return "Main page GET request."
 
-# @app.route('/api/chat', methods=['GET', 'POST'])
-# def chat():
-#     if request.method == "POST":
-#         args = parser.parse_args()
-#         # Invoke your text processing script here
-#         # processed_text = scripts.text_processor(args['text'])
-#         docs, pmids = get_abstracts_from_query(args['input'], num_results=args['num_articles'])
-#         docs_split = split_docs(docs)
+@app.route('/api/chat', methods=['GET', 'POST'])
+def chat():
+    if request.method == "POST":
+        args = parser.parse_args()
+        # Invoke your text processing script here
+        # processed_text = scripts.text_processor(args['text'])
+        docs, pmids = get_abstracts_from_query(args['input'], num_results=args['num_articles'])
+        docs_split = split_docs(docs)
         
-#         llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
-#         question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
-#         # Below, "with_sources" results in answer containing source references
-#         # "map_reduce" results in answer being a summary of the source references
-#         doc_chain = load_qa_with_sources_chain(llm, chain_type="stuff")
-#         vectorstore = Chroma.from_documents(docs_split, embeddings.HuggingFaceEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
-#         print("Built Chroma vector store.")
-#         chain = ChatVectorDBChain(
-#             vectorstore=vectorstore,
-#             question_generator=question_generator,
-#             combine_docs_chain=doc_chain,
-#             return_source_documents=True,  # results in referenced documents themselves being returned
-#             top_k_docs_for_context=min(NUM_CHUNKS, len(docs_split))
-#         )
-#         print("Built Chain.")
-#         vectordbkwargs = {} # {"search_distance": 0.9}  # threshold for similarity search (setting this may reduce hallucinations)
-#         chat_history = [("You are a helpful chatbot. You are to explain abbreviations and symbols before using them. Please provide lengthy, detailed answers. If the documents provided are insufficient to answer the question, say so.",
-#                          "Understood. I am a helpful chatbot. I will explain abbreviations and symbols before using them and provide detailed answers. If the documents provided are insufficient to answer the question, I will say so.")]
-#         result = chain({"question": args.question, "chat_history": chat_history,
-#               "vectordbkwargs": vectordbkwargs})
-#         print("Received answer.")
-#         chat_history.append((args.question, result["answer"]))
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
+        question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
+        # Below, "with_sources" results in answer containing source references
+        # "map_reduce" results in answer being a summary of the source references
+        doc_chain = load_qa_with_sources_chain(llm, chain_type="stuff")
+        vectorstore = Chroma.from_documents(docs_split, embeddings.HuggingFaceEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
+        print("Built Chroma vector store.")
+        chain = ChatVectorDBChain(
+            vectorstore=vectorstore,
+            question_generator=question_generator,
+            combine_docs_chain=doc_chain,
+            return_source_documents=True,  # results in referenced documents themselves being returned
+            top_k_docs_for_context=min(NUM_CHUNKS, len(docs_split))
+        )
+        print("Built Chain.")
+        vectordbkwargs = {} # {"search_distance": 0.9}  # threshold for similarity search (setting this may reduce hallucinations)
+        chat_history = [("You are a helpful chatbot. You are to explain abbreviations and symbols before using them. Please provide lengthy, detailed answers. If the documents provided are insufficient to answer the question, say so.",
+                         "Understood. I am a helpful chatbot. I will explain abbreviations and symbols before using them and provide detailed answers. If the documents provided are insufficient to answer the question, I will say so.")]
+        result = chain({"question": args.question, "chat_history": chat_history,
+              "vectordbkwargs": vectordbkwargs})
+        print("Received answer.")
+        chat_history.append((args.question, result["answer"]))
         
-#         citations = [doc.metadata["source"] for doc in result["source_documents"]]
-#         response = {"answer": result["answer"], "citations": citations}
-#         print(result["answer"])
-#         return response
-#     if request.method == "GET":
-#         response = {'data': "GPSee chat API reached!"}
-#         return response
+        citations = [doc.metadata["source"] for doc in result["source_documents"]]
+        response = {"answer": result["answer"], "citations": citations}
+        print(result["answer"])
+        return response
+    if request.method == "GET":
+        response = {'data': "GPSee chat API reached!"}
+        return response
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True)
