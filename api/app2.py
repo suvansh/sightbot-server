@@ -174,10 +174,9 @@ def index():
 @app.route('/api/chat', methods=['GET', 'POST'])
 def chat():
     if request.method == "POST":
-        args = parser.parse_args()
-        # Invoke your text processing script here
-        # processed_text = scripts.text_processor(args['text'])
-        docs, pmids = get_abstracts_from_query(args['input'], num_results=args['num_articles'])
+        args = request.get_json()
+        inp, num_articles, question, messages = args.get('input'), args.get('num_articles'), args.get('question'), args.get('messages')
+        docs, _ = get_abstracts_from_query(inp, num_results=num_articles)
         docs_split = split_docs(docs)
         
         llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
@@ -186,7 +185,6 @@ def chat():
         # "map_reduce" results in answer being a summary of the source references
         doc_chain = load_qa_with_sources_chain(llm, chain_type="stuff")
         vectorstore = Chroma.from_documents(docs_split, embeddings.HuggingFaceEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
-        print("Built Chroma vector store.")
         chain = ChatVectorDBChain(
             vectorstore=vectorstore,
             question_generator=question_generator,
@@ -194,22 +192,20 @@ def chat():
             return_source_documents=True,  # results in referenced documents themselves being returned
             top_k_docs_for_context=min(NUM_CHUNKS, len(docs_split))
         )
-        print("Built Chain.")
         vectordbkwargs = {} # {"search_distance": 0.9}  # threshold for similarity search (setting this may reduce hallucinations)
         chat_history = [("You are a helpful chatbot. You are to explain abbreviations and symbols before using them. Please provide lengthy, detailed answers. If the documents provided are insufficient to answer the question, say so.",
                          "Understood. I am a helpful chatbot. I will explain abbreviations and symbols before using them and provide detailed answers. If the documents provided are insufficient to answer the question, I will say so.")]
-        result = chain({"question": args.question, "chat_history": chat_history,
-              "vectordbkwargs": vectordbkwargs})
-        print("Received answer.")
-        chat_history.append((args.question, result["answer"]))
+        chat_history.extend([(messages[i]["content"], messages[i+1]["content"]) for i in range(0, len(messages)-1, 2)])
+        result = chain({"question": question, "chat_history": chat_history, "vectordbkwargs": vectordbkwargs})
+        chat_history.append((question, result["answer"]))
         
         citations = [doc.metadata["source"] for doc in result["source_documents"]]
         response = {"answer": result["answer"], "citations": citations}
-        print(result["answer"])
-        return response
+        return response, 200
+    
     if request.method == "GET":
         response = {'data': "GPSee chat API reached!"}
-        return response
+        return response, 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True)
