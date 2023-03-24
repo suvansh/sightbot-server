@@ -23,8 +23,15 @@ import xml.etree.ElementTree as ET
 import sys
 import requests
 
-# with open("/Users/suvansh/.openai.key") as f:
-#     openai_api_key = f.read().strip()
+
+#def get_secret(secret_name):
+#    # Create a client to access the Secrets Manager API
+#    client = secretmanager.SecretManagerServiceClient()
+#    # Retrieve the secret value
+#    secret_name = "projects/608643728094/secrets/openai-api-key/versions/1"
+#    response = client.access_secret_version(name=secret_name)
+#    secret = response.payload.data.decode("UTF-8")
+#    return secret
 
 openai_api_key = os.environ.get("OPENAI_API_KEY")
 
