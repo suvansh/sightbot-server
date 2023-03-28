@@ -5,16 +5,13 @@ from flask_cors import CORS
 
 from enum import Enum
 
+from langchain import embeddings, text_splitter, PromptTemplate
 from langchain.llms import OpenAI
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import OnlinePDFLoader, PagedPDFSplitter
 from langchain.docstore.document import Document
-from langchain import text_splitter
 from langchain.vectorstores import Chroma
-from langchain import embeddings
-from langchain.llms import OpenAI
-from langchain.chains import ChatVectorDBChain
-from langchain.chains import LLMChain
+from langchain.chains import ChatVectorDBChain, LLMChain
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
 from langchain.chains.chat_vector_db.prompts import CONDENSE_QUESTION_PROMPT
 
@@ -169,6 +166,24 @@ def get_abstracts_from_pmids(pmids):
     print(f"Parsed {len(docs)} documents from {len(articles)} abstracts.")
     return docs
 
+def get_query_from_question(question, openai_api_key):
+    """Get a query from a question"""
+    template = """Given a question, your task is to come up with a relevant medical search term that would retrieve relevant articles from a medical article database. The search term should not be so specific as to be unlikely to retrieve any articles, but should also not be so general as to retrieve too many articles. The search term should be a single word or phrase, and should not contain any punctuation. Convert any initialisms to their full form.
+    Question: What are some treatments for diabetic macular edema?
+    Search Query: diabetic macular edema
+    Question: What is the workup for a patient with a suspected pulmonary embolism?
+    Search Query: pulmonary embolism treatment
+    Question: What is the recommended treatment for a grade 2 PCL tear?
+    Search Query: posterior cruciate ligament tear
+    Question: When is an MRI recommended for a concussion?
+    Search Query: concussion magnetic resonance imaging
+    Question: {question}
+    Search Query: """
+    prompt = PromptTemplate(template=template, input_variables=["question"])
+    llm_chain = LLMChain(prompt=prompt, llm=ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key))
+    query = llm_chain.run(question)
+    return query
+
 
 """ Flask setup """
 app = Flask(__name__)
@@ -182,15 +197,17 @@ def index():
 def chat():
     if request.method == "POST":
         args = request.get_json()
-        inp, num_articles, question, messages = args.get('input'), args.get('num_articles'), args.get('question'), args.get('messages')
-        docs, _ = get_abstracts_from_query(inp, num_results=num_articles)
+        question, messages, openai_api_key = args.get('question'), args.get('messages'), args.get('openai_api_key')
+        num_articles = 20
+        pubmed_query = get_query_from_question(question, openai_api_key=openai_api_key)
+        docs, _ = get_abstracts_from_query(pubmed_query, num_results=num_articles)
         docs_split = split_docs(docs)
         
         llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
         question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
         # Below, "with_sources" results in answer containing source references
-        # "map_reduce" results in answer being a summary of the source references
-        doc_chain = load_qa_with_sources_chain(llm, chain_type="stuff")
+        # chain_type of "map_reduce" results in answer being a summary of the source references
+        doc_chain = load_qa_with_sources_chain(llm, chain_type="refine")
         vectorstore = Chroma.from_documents(docs_split, embeddings.HuggingFaceEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
         chain = ChatVectorDBChain(
             vectorstore=vectorstore,
