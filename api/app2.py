@@ -6,19 +6,21 @@ from flask_cors import CORS
 from enum import Enum
 
 from langchain import embeddings, text_splitter, PromptTemplate
-from langchain.llms import OpenAI
 from langchain.chat_models import ChatOpenAI
 from langchain.document_loaders import OnlinePDFLoader, PagedPDFSplitter
 from langchain.docstore.document import Document
 from langchain.vectorstores import Chroma
 from langchain.chains import ChatVectorDBChain, LLMChain
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.chains.chat_vector_db.prompts import CONDENSE_QUESTION_PROMPT
 
 import xml.etree.ElementTree as ET
 
 import sys
 import requests
+import logging
+logging.basicConfig(level=logging.INFO)
 
 
 #def get_secret(secret_name):
@@ -187,7 +189,8 @@ def get_query_from_question(question, openai_api_key):
 
 """ Flask setup """
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+#CORS(app, origins=['https://gpsee.vercel.app', 'http://localhost:3000'])
+CORS(app, resources={r"/*": {"origins": ["*", "https://gpsee.brilliantly.ai", "https://gpsee.vercel.app", "http://localhost:3000"]}})
 
 @app.route('/', methods=['GET'])
 def index():
@@ -196,6 +199,7 @@ def index():
 @app.route('/api/chat', methods=['GET', 'POST'])
 def chat():
     if request.method == "POST":
+        logging.info(request.headers.get("Referer"))
         args = request.get_json()
         question, messages, openai_api_key = args.get('question'), args.get('messages'), args.get('openai_api_key')
         num_articles = 20
@@ -208,7 +212,7 @@ def chat():
         # Below, "with_sources" results in answer containing source references
         # chain_type of "map_reduce" results in answer being a summary of the source references
         doc_chain = load_qa_with_sources_chain(llm, chain_type="refine")
-        vectorstore = Chroma.from_documents(docs_split, embeddings.HuggingFaceEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
+        vectorstore = Chroma.from_documents(docs_split, OpenAIEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
         chain = ChatVectorDBChain(
             vectorstore=vectorstore,
             question_generator=question_generator,
