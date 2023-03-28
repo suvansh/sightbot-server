@@ -11,7 +11,7 @@ from langchain.document_loaders import OnlinePDFLoader, PagedPDFSplitter
 from langchain.docstore.document import Document
 from langchain import text_splitter
 from langchain.vectorstores import Chroma
-from langchain import embeddings
+from langchain.embeddings import OpenAIEmbeddings
 from langchain.llms import OpenAI
 from langchain.chains import ChatVectorDBChain
 from langchain.chains import LLMChain
@@ -22,6 +22,8 @@ import xml.etree.ElementTree as ET
 
 import sys
 import requests
+import logging
+logging.basicConfig(level=logging.INFO)
 
 
 #def get_secret(secret_name):
@@ -172,7 +174,8 @@ def get_abstracts_from_pmids(pmids):
 
 """ Flask setup """
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+#CORS(app, origins=['https://gpsee.vercel.app', 'http://localhost:3000'])
+CORS(app, resources={r"/*": {"origins": ["*", "https://gpsee.brilliantly.ai", "https://gpsee.vercel.app", "http://localhost:3000"]}})
 
 @app.route('/', methods=['GET'])
 def index():
@@ -181,6 +184,7 @@ def index():
 @app.route('/api/chat', methods=['GET', 'POST'])
 def chat():
     if request.method == "POST":
+        logging.info(request.headers.get("Referer"))
         args = request.get_json()
         inp, num_articles, question, messages = args.get('input'), args.get('num_articles'), args.get('question'), args.get('messages')
         docs, _ = get_abstracts_from_query(inp, num_results=num_articles)
@@ -191,7 +195,7 @@ def chat():
         # Below, "with_sources" results in answer containing source references
         # "map_reduce" results in answer being a summary of the source references
         doc_chain = load_qa_with_sources_chain(llm, chain_type="stuff")
-        vectorstore = Chroma.from_documents(docs_split, embeddings.HuggingFaceEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
+        vectorstore = Chroma.from_documents(docs_split, OpenAIEmbeddings(), ids=[doc.metadata["source"] for doc in docs_split])
         chain = ChatVectorDBChain(
             vectorstore=vectorstore,
             question_generator=question_generator,
