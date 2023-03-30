@@ -103,9 +103,9 @@ def split_docs(docs, splitter_type=text_splitter.TokenTextSplitter, chunk_size=C
     return docs_split
 
 
-def get_pubmed_results_old(query, num_results=30):
+def get_pubmed_results_old(query, year_min=1900, year_max=2023, num_results=30):
     """Get PubMed results"""
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&retmax={num_results}&term=(pubmed%20pmc%20open%20access[filter])+{query}"
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&datetype=pdat&mindate={year_min}&maxdate={year_max}retmax={num_results}&term=(pubmed%20pmc%20open%20access[filter])+{query}"
     response = requests.get(url)  # make API call
     pm_ids = response.json()['esearchresult']['idlist']  # get list of ids
     print(f"Found {len(pm_ids)} results for query '{query}'")
@@ -201,14 +201,17 @@ def chat():
     if request.method == "POST":
         logging.info(request.headers.get("Referer"))
         args = request.get_json()
+        llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
+        question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
+
         question, messages, openai_api_key = args.get('question'), args.get('messages'), args.get('openai_api_key')
         num_articles = 20
-        pubmed_query = get_query_from_question(question, openai_api_key=openai_api_key)
+        condensed_question = question_generator.predict(question=)
+        pubmed_query = get_query_from_question(condensed_question, openai_api_key=openai_api_key)
         docs, _ = get_abstracts_from_query(pubmed_query, num_results=num_articles)
         docs_split = split_docs(docs)
         
-        llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
-        question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
+        
         # Below, "with_sources" results in answer containing source references
         # chain_type of "map_reduce" results in answer being a summary of the source references
         doc_chain = load_qa_with_sources_chain(llm, chain_type="refine")
