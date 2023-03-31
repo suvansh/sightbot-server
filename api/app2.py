@@ -107,7 +107,9 @@ def split_docs(docs, splitter_type=text_splitter.TokenTextSplitter, chunk_size=C
 
 def get_pubmed_results_old(query, year_min=1900, year_max=2023, num_results=30):
     """Get PubMed results"""
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&datetype=pdat&mindate={year_min}&maxdate={year_max}retmax={num_results}&term=(pubmed%20pmc%20open%20access[filter])+{query}"
+    #url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&datetype=pdat&mindate={year_min}&maxdate={year_max}&retmax={num_results}&term=(pubmed%20pmc%20open%20access[filter])+{query}"
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&datetype=pdat&mindate={year_min}&maxdate={year_max}&retmax={num_results}&term={query}"
+
     response = requests.get(url)  # make API call
     pm_ids = response.json()['esearchresult']['idlist']  # get list of ids
     logging.info(f"Found {len(pm_ids)} results for query '{query}'")
@@ -203,11 +205,13 @@ def chat():
     if request.method == "POST":
         logging.info(request.headers.get("Referer"))
         args = request.get_json()
+        
+        question, messages, openai_api_key = args.get('question'), args.get('messages'), args.get('openai_api_key')
+        year_min, year_max = args.get('years')  # 1900, 2023  # TODO get from request
+
         llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
         question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
 
-        question, messages, openai_api_key = args.get('question'), args.get('messages'), args.get('openai_api_key')
-        year_min, year_max = 1900, 2023  # TODO get from request
         chat_history_tuples = [(messages[i]['content'], messages[i+1]['content']) for i in range(0, len(messages), 2)]
         num_articles = 20
         condensed_question = question_generator.predict(question=question, chat_history=_get_chat_history(chat_history_tuples))
