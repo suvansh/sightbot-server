@@ -105,10 +105,10 @@ def split_docs(docs, splitter_type=text_splitter.TokenTextSplitter, chunk_size=C
     return docs_split
 
 
-def get_pubmed_results_old(query, year_min=1900, year_max=2023, num_results=30):
+def get_pubmed_results_old(query, year_min=1900, year_max=2023, num_results=30, open_access=False):
     """Get PubMed results"""
-    #url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&datetype=pdat&mindate={year_min}&maxdate={year_max}&retmax={num_results}&term=(pubmed%20pmc%20open%20access[filter])+{query}"
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&datetype=pdat&mindate={year_min}&maxdate={year_max}&retmax={num_results}&term={query}"
+    open_access_filter = "(pubmed%20pmc%20open%20access[filter])+" if open_access else ""
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&sort=relevance&datetype=pdat&mindate={year_min}&maxdate={year_max}&retmax={num_results}&term={open_access_filter}{query}"
 
     response = requests.get(url)  # make API call
     pm_ids = response.json()['esearchresult']['idlist']  # get list of ids
@@ -117,15 +117,16 @@ def get_pubmed_results_old(query, year_min=1900, year_max=2023, num_results=30):
 
 
 def get_abstracts_from_query(query, year_min=1900, year_max=2023, num_results=30):
-    pmids = get_pubmed_results_old(query, year_min=year_min, year_max=year_max, num_results=num_results)
+    """Get abstracts of articles from a query"""
+    pmids = get_pubmed_results_old(query, year_min=year_min, year_max=year_max, num_results=num_results, open_access=False)
     docs = get_abstracts_from_pmids(pmids)
     return docs, pmids
 
 
-def get_docs_from_query(query, mode="pubmed", num_results=30):
-    """Get documents from a query"""
+def get_fulltext_from_query(query, year_min=1900, year_max=2023, mode="pubmed", num_results=30):
+    """Get full text of articles from a query"""
     if mode == "pubmed":
-        pm_ids = get_pubmed_results_old(query, num_results=num_results)
+        pm_ids = get_pubmed_results_old(query, year_min=year_min, year_max=year_max, num_results=num_results, open_access=True)
         docs = []
         for pm_id in pm_ids:
             article_docs = get_docs_from_file(pm_id, DocType.TEXT)
@@ -193,7 +194,6 @@ def get_query_from_question(question, openai_api_key):
 
 """ Flask setup """
 app = Flask(__name__)
-#CORS(app, origins=['https://gpsee.vercel.app', 'http://localhost:3000'])
 CORS(app, resources={r"/*": {"origins": ["*", "https://gpsee.brilliantly.ai", "https://gpsee.vercel.app", "http://localhost:3000"]}})
 
 @app.route('/', methods=['GET'])
@@ -205,9 +205,11 @@ def chat():
     if request.method == "POST":
         logging.info(request.headers.get("Referer"))
         args = request.get_json()
-        
-        question, messages, openai_api_key = args.get('question'), args.get('messages'), args.get('openai_api_key')
-        year_min, year_max = args.get('years')  # 1900, 2023  # TODO get from request
+
+        openai_api_key = args.get('openai_api_key')
+        question, messages = args.get('question'), args.get('messages')
+        year_min, year_max = args.get('years')
+        search_mode = args.get('search_mode')
 
         llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
         question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
@@ -219,7 +221,12 @@ def chat():
         logging.info(f"Condensed question: {condensed_question}")
 
         pubmed_query = get_query_from_question(condensed_question, openai_api_key=openai_api_key)
-        docs, _ = get_abstracts_from_query(pubmed_query, year_min=year_min, year_max=year_max, num_results=num_articles)
+        if search_mode == "abstracts":
+            docs, _ = get_abstracts_from_query(pubmed_query, year_min=year_min, year_max=year_max, num_results=num_articles)
+        elif search_mode == "fulltext":
+            docs, _ = get_fulltext_from_query(pubmed_query, year_min=year_min, year_max=year_max, num_results=num_articles)
+        else:
+            raise ValueError(f"Invalid search mode: {search_mode}")
         docs_split = split_docs(docs)
         
         
