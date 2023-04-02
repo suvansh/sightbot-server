@@ -23,6 +23,12 @@ import sys
 import requests
 import logging
 logging.basicConfig(level=logging.INFO)
+handler = logging.FileHandler('/home/ubuntu/logs/gpsee.log')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+handler.setFormatter(formatter)
+logger = logging.getLogger(__name__)
+logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 
 #def get_secret(secret_name):
@@ -194,7 +200,7 @@ def get_query_from_question(question, openai_api_key):
 
 """ Flask setup """
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["*", "https://gpsee.brilliantly.ai", "https://gpsee.vercel.app", "http://localhost:3000"]}})
+CORS(app, resources={r"/*": {"origins": ["https://gpsee.brilliantly.ai", "https://gpsee.vercel.app", "http://localhost:3000"]}})
 
 @app.route('/', methods=['GET'])
 def index():
@@ -210,17 +216,20 @@ def chat():
         question, messages = args.get('question'), args.get('messages')
         year_min, year_max = args.get('years')
         search_mode = args.get('search_mode')
+        pubmed_query = args.get('pubmed_query')
+        logging.info(f"Pubmed query from request: {pubmed_query}")
 
         llm = ChatOpenAI(model_name="gpt-3.5-turbo", openai_api_key=openai_api_key)
         question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
 
         chat_history_tuples = [(messages[i]['content'], messages[i+1]['content']) for i in range(0, len(messages), 2)]
+        logging.info(chat_history_tuples)
         num_articles = 20
         condensed_question = question_generator.predict(question=question, chat_history=_get_chat_history(chat_history_tuples))
         logging.info(f"Original question: {question}")
         logging.info(f"Condensed question: {condensed_question}")
 
-        pubmed_query = get_query_from_question(condensed_question, openai_api_key=openai_api_key)
+        pubmed_query = pubmed_query or get_query_from_question(condensed_question, openai_api_key=openai_api_key)
         if search_mode == "abstracts":
             docs, _ = get_abstracts_from_query(pubmed_query, year_min=year_min, year_max=year_max, num_results=num_articles)
         elif search_mode == "fulltext":
@@ -228,6 +237,9 @@ def chat():
         else:
             raise ValueError(f"Invalid search mode: {search_mode}")
         docs_split = split_docs(docs)
+        if len(docs_split) == 0:
+            response = {"answer": "No articles were found using the PubMed query. If you didn't specify one, it was automatically generated for you. Please try again after specifying a query under \"Advanced\" that you think will yield articles relevant to your question.", "pubmed_query": pubmed_query}
+            return response, 200
         
         
         # Below, "with_sources" results in answer containing source references
@@ -249,7 +261,7 @@ def chat():
         chat_history.append((question, result["answer"]))
         
         citations = list(set(doc.metadata["pmid"] for doc in result["source_documents"]))
-        response = {"answer": result["answer"], "citations": citations}
+        response = {"answer": result["answer"], "citations": citations, "pubmed_query": pubmed_query}
         logging.info(f"Answer to query: {result['answer']}")
         logging.info(f"Citations: {citations}")
         logging.info(chat_history)
