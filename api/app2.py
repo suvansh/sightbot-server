@@ -17,6 +17,8 @@ from langchain.chains.question_answering import load_qa_chain
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.chains.chat_vector_db.prompts import CONDENSE_QUESTION_PROMPT
 
+import openai
+
 import xml.etree.ElementTree as ET
 
 import sys
@@ -188,6 +190,8 @@ def get_query_from_question(question, openai_api_key):
     Search Query: pulmonary embolism treatment
     Question: What is the recommended treatment for a grade 2 PCL tear?
     Search Query: posterior cruciate ligament tear
+    Question: What are the possible complications associated with type 1 diabetes and how does it impact the eyes?
+    Search Query: type 1 diabetes eyes
     Question: When is an MRI recommended for a concussion?
     Search Query: concussion magnetic resonance imaging
     Question: {question}
@@ -225,7 +229,10 @@ def chat():
         chat_history_tuples = [(messages[i]['content'], messages[i+1]['content']) for i in range(0, len(messages), 2)]
         logging.info(chat_history_tuples)
         num_articles = 20
-        condensed_question = question_generator.predict(question=question, chat_history=_get_chat_history(chat_history_tuples))
+        try:
+            condensed_question = question_generator.predict(question=question, chat_history=_get_chat_history(chat_history_tuples))
+        except openai.error.AuthenticationError:
+            return jsonify({'message': 'OpenAI authentication error. Please check your API Key.'}), 400
         logging.info(f"Original question: {question}")
         logging.info(f"Condensed question: {condensed_question}")
 
@@ -238,7 +245,7 @@ def chat():
             raise ValueError(f"Invalid search mode: {search_mode}")
         docs_split = split_docs(docs)
         if len(docs_split) == 0:
-            response = {"answer": "No articles were found using the PubMed query. If you didn't specify one, it was automatically generated for you. Please try again after specifying a query under \"Advanced\" that you think will yield articles relevant to your question.", "pubmed_query": pubmed_query}
+            response = {"answer": "No articles were found using the PubMed search term. If you didn't specify one, it was automatically generated for you. Please try again after specifying a search term under \"Advanced\" that you think will yield articles relevant to your question.", "pubmed_query": pubmed_query}
             return response, 200
         
         
