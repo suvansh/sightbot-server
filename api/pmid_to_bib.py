@@ -65,6 +65,6 @@ def formatReference(reference, use_short):
 
 def get_bibtex_from_pmids(pmids):
     references = getReferences(pmids)
-    if (isinstance(references, list) and len(references) == 0) or ('status' in references.keys() and references['status'] == 'error'):
-        return''
+    if (isinstance(references, list) and len(references) == 0) or (isinstance(references, dict) and 'status' in references.keys() and references['status'] == 'error'):
+        return ''
     return '\n'.join([formatReference(reference, True) for reference in references])
