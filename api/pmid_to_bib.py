@@ -40,6 +40,7 @@ def formatReference(reference, use_short):
     journal_short = reference.get('container-title-short') or ''
     volume = reference.get('volume') or ''
     page = reference.get('page') or ''
+    pmid = reference.get('PMID') or ''
     
     if 'issued' in reference.keys():
         year = reference['issued']['date-parts'][0][0]
@@ -58,7 +59,7 @@ def formatReference(reference, use_short):
     volume={{{volume}}},
     pages={{{page}}},
     year={{{year}}},
-    PMID={{{id}}}
+    PMID={{{pmid}}}
 }}
 '''
     return output
