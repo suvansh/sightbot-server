@@ -233,6 +233,8 @@ def chat():
             condensed_question = question_generator.predict(question=question, chat_history=_get_chat_history(chat_history_tuples))
         except openai.error.AuthenticationError:
             return jsonify({'message': 'OpenAI authentication error. Please check your API Key.'}), 400
+        except openai.error.RateLimitError:
+            return jsonify({'message': 'Your OpenAI free quota has ended. Please add your credit card information to your OpenAI account to continue.'}), 400
         logging.info(f"Original question: {question}")
         logging.info(f"Condensed question: {condensed_question}")
 
