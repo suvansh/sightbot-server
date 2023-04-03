@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from enum import Enum
+from pmid_to_bib import get_bibtex_from_pmids
 
 from langchain import embeddings, text_splitter, PromptTemplate
 from langchain.chat_models import ChatOpenAI
@@ -183,7 +184,7 @@ def get_abstracts_from_pmids(pmids):
 
 def get_query_from_question(question, openai_api_key):
     """Get a query from a question"""
-    template = """Given a question, your task is to come up with a relevant search term that would retrieve relevant articles from a scientifc article database. The search term should not be so specific as to be unlikely to retrieve any articles, but should also not be so general as to retrieve too many articles. The search term should be a single word or phrase, and should not contain any punctuation. Convert any initialisms to their full form.
+    template = """Given a question, your task is to come up with a relevant search term that would retrieve relevant articles from a scientific article database. The search term should not be so specific as to be unlikely to retrieve any articles, but should also not be so general as to retrieve too many articles. The search term should be a single word or phrase, and should not contain any punctuation. Convert any initialisms to their full form.
     Question: What are some treatments for diabetic macular edema?
     Search Query: diabetic macular edema
     Question: What is the workup for a patient with a suspected pulmonary embolism?
@@ -268,7 +269,7 @@ def chat():
         chat_history.append((question, result["answer"]))
         
         citations = list(set(doc.metadata["pmid"] for doc in result["source_documents"]))
-        response = {"answer": result["answer"], "citations": citations, "pubmed_query": pubmed_query}
+        response = {"answer": result["answer"], "citations": citations, "pubmed_query": pubmed_query, "bibtex": get_bibtex_from_pmids(citations)}
         logging.info(f"Answer to query: {result['answer']}")
         logging.info(f"Citations: {citations}")
         logging.info(chat_history)
